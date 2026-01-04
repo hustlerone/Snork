@@ -37,6 +37,20 @@
           (builtins.isNull modulesFolder) || (builtins.pathExists modulesFolder)
         ) "Attribute `modulesFolder` is not valid path.";
 
+        assert lib.assertMsg (
+          (builtins.isNull patchesFolder) || (builtins.pathExists patchesFolder)
+        ) "Attribute `patchesFolder` is not valid path.";
+
         import ./lib/generateSystems.nix nixpkgs specialArgs systemsFolder modulesFolder patchesFolder;
+
+      templates = {
+        quick-start = {
+          description = ''
+            A minimal (example) configuration to get started.
+          '';
+
+          path = ./templates/quick-start;
+        };
+      };
     };
 }

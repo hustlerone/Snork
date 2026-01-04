@@ -45,6 +45,9 @@ in
 
       modules = [
         main
+        {
+          networking.hostName = lib.mkDefault (builtins.toString Folder);
+        }
       ]
       ++ (
         if (!(builtins.isNull modulesFolder)) && builtins.pathExists modulesFolder then
