@@ -15,6 +15,8 @@
       forEachArchitecture =
         architectures: apply:
         nixpkgs.lib.genAttrs architectures (system: apply nixpkgs.legacyPackages.${system});
+
+      pkgs = nixpkgs.lib.genAttrs allArchitectures (system: import nixpkgs { inherit system; });
     in
     {
       inherit (nixpkgs) formatter;
@@ -25,9 +27,17 @@
           modulesFolder ? null,
           patchesFolder ? null,
           specialArgs ? null,
+          profilesFolder ? null,
+          profileDefinitions ? { },
         }:
         let
           inherit (nixpkgs) lib;
+
+          allLists =
+            attrSet:
+            !builtins.any (x: x == false) (
+              builtins.map (x: builtins.typeOf x == "list") (builtins.attrValues attrSet)
+            );
         in
         assert lib.assertMsg (
           !(builtins.isNull systemsFolder) && (builtins.pathExists systemsFolder)
@@ -41,7 +51,18 @@
           (builtins.isNull patchesFolder) || (builtins.pathExists patchesFolder)
         ) "Attribute `patchesFolder` is not valid path.";
 
-        import ./lib/generateSystems.nix nixpkgs specialArgs systemsFolder modulesFolder patchesFolder;
+        assert lib.assertMsg (
+          (builtins.isNull profilesFolder) || (builtins.pathExists profilesFolder)
+        ) "Attribute `profilesFolder` is not valid path.";
+
+        assert lib.assertMsg (
+          (builtins.isNull profilesFolder)
+          || (builtins.pathExists profilesFolder && (allLists profileDefinitions))
+        ) "Attribute `profileDefinitions` is not an attribute set of attribute list.";
+
+        import ./lib/generateSystems.nix nixpkgs specialArgs systemsFolder modulesFolder patchesFolder
+          profilesFolder
+          profileDefinitions;
 
       templates = {
         quick-start = {

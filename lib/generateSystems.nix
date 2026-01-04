@@ -1,11 +1,11 @@
-nixpkgs: specialArgs: systemsFolder: modulesFolder: patchesFolder:
+nixpkgs: specialArgs: systemsFolder: modulesFolder: patchesFolder: profilesFolder: profileDefinitions:
 let
   inherit (nixpkgs) lib;
   recursivelyImport = import ./recursivelyImport.nix { inherit lib; };
 
   getPatches =
     dir:
-    if builtins.pathExists dir then
+    if !(builtins.isNull dir) && builtins.pathExists dir then
       (map (file: dir + "/${file}") (builtins.attrNames (builtins.readDir dir)))
     else
       [ ];
@@ -16,32 +16,36 @@ in
   (builtins.mapAttrs (
     Folder: _:
     let
-      main = (systemsFolder + "/${Folder}/configuration.nix");
-      entrypoint = import main {
-        config = { };
-        pkgs = { };
-        inherit lib;
-      };
-      pkgs = (import nixpkgs { inherit (entrypoint.nixpkgs) hostPlatform; });
-      lib = nixpkgs.lib;
+      haveProfile = (builtins.pathExists modulesFolder) && (builtins.hasAttr Folder profileDefinitions);
+      assembledArgs = {
+        profileDefinitions =
+          if haveProfile then (lib.genAttrs (builtins.getAttr Folder profileDefinitions) (x: true)) else { };
+      }
+      // specialArgs;
     in
     let
-      nixpkgs' = lib.mkIf (builtins.length (getPatches patchesFolder) > 0) (
-        pkgs.applyPatches {
-          name = "nixpkgs-snorked";
-          src = nixpkgs;
-          patches = getPatches patchesFolder;
-        }
-      );
-
-      nixpkgs = lib.mkIf (builtins.isNull nixpkgs') (
-        import "${nixpkgs'}/flake.nix".outputs { self = "${nixpkgs'}/flake.nix".outputs; }
-      );
+      main = (systemsFolder + "/${Folder}/configuration.nix");
+      lib = nixpkgs.lib;
+      pkgs = import nixpkgs { system = "x86_64-linux"; };
     in
-    lib.nixosSystem {
-      inherit (entrypoint) system;
+    let
+      nixpkgs' =
+        if (builtins.length (getPatches patchesFolder) > 0) then
+          (pkgs.applyPatches {
+            name = "nixpkgs-snorked";
+            src = nixpkgs;
+            patches = getPatches patchesFolder;
+          })
+        else
+          nixpkgs;
+    in
 
-      specialArgs = (if builtins.isAttrs specialArgs then specialArgs else { });
+    ### I can't execute the flake here. Cry me a river.
+    ### Your patched `lib` won't carry over. Not that it matters.
+
+    import ./nixosSystem.nix nixpkgs' {
+      specialArgs = assembledArgs;
+      system = null;
 
       modules = [
         main
@@ -49,14 +53,15 @@ in
           networking.hostName = lib.mkDefault (builtins.toString Folder);
         }
       ]
-      ++ (
-        if (!(builtins.isNull modulesFolder)) && builtins.pathExists modulesFolder then
-          recursivelyImport [
-            (lib.mkIf (!(builtins.isNull modulesFolder) && builtins.pathExists modulesFolder) modulesFolder)
-          ]
-        else
-          [ ]
-      );
+      ++ (recursivelyImport (
+        (if (builtins.pathExists modulesFolder) then [ modulesFolder ] else [ ])
+        ++ (
+          if haveProfile then
+            builtins.map (x: profilesFolder + "/${x}") (builtins.getAttr Folder profileDefinitions)
+          else
+            [ ]
+        )
+      ));
     }
   ))
 ])
