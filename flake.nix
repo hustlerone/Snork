@@ -72,6 +72,14 @@
 
           path = ./templates/quick-start;
         };
+
+        real-world-example = {
+          description = ''
+            An example configuration that's closer to a real world application.
+          '';
+
+          path = ./templates/complete-example;
+        };
       };
     };
 }

@@ -1,0 +1,47 @@
+From aa9e5c1adc7b157389a9e42e01c151a64c39e826 Mon Sep 17 00:00:00 2001
+From: hustlerone <nine-ball@tutanota.com>
+Date: Fri, 2 Jan 2026 18:03:45 +0100
+Subject: [PATCH] warzone2100: add campaign cutscenes by default
+
+---
+ pkgs/by-name/wa/warzone2100/package.nix | 13 ++++++-------
+ 1 file changed, 6 insertions(+), 7 deletions(-)
+
+diff --git a/pkgs/by-name/wa/warzone2100/package.nix b/pkgs/by-name/wa/warzone2100/package.nix
+index 4f050b508f6d9..ed874f78e4841 100644
+--- a/pkgs/by-name/wa/warzone2100/package.nix
++++ b/pkgs/by-name/wa/warzone2100/package.nix
+@@ -36,19 +36,18 @@
+ 
+   gitUpdater,
+ 
+-  withVideos ? false,
++  withVideos ? true,
+ }:
+ 
+ let
+-  pname = "warzone2100";
+-  sequences_src = fetchurl {
+-    url = "mirror://sourceforge/${pname}/warzone2100/Videos/high-quality-en/sequences.wz";
+-    sha256 = "90ff552ca4a70e2537e027e22c5098ea4ed1bc11bb7fc94138c6c941a73d29fa";
++  sequences = fetchurl {
++    url = "https://github.com/Warzone2100/wz-sequences/releases/download/v3/high-quality-en-sequences.wz";
++    hash = "sha256-kP9VLKSnDiU34CfiLFCY6k7RvBG7f8lBOMbJQac9Kfo=";
+   };
+ in
+ 
+ stdenv.mkDerivation (finalAttrs: {
+-  inherit pname;
++  pname = "warzone2100";
+   version = "4.6.2";
+ 
+   src = fetchurl {
+@@ -114,7 +113,7 @@ stdenv.mkDerivation (finalAttrs: {
+   ++ lib.optional stdenv.hostPlatform.isDarwin "-P../configure_mac.cmake";
+ 
+   postInstall = lib.optionalString withVideos ''
+-    cp ${sequences_src} $out/share/warzone2100/sequences.wz
++    ln -sn ${sequences} $out/share/warzone2100/sequences.wz
+   '';
+ 
+   passthru.tests = {

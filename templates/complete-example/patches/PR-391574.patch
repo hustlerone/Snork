@@ -1,0 +1,323 @@
+From 4c4c6bbe5cd7c4a222eda471d86d0e20dda771e6 Mon Sep 17 00:00:00 2001
+From: hustlerone <nine-ball@tutanota.com>
+Date: Fri, 16 May 2025 20:31:30 +0200
+Subject: [PATCH] pkgs/kmscon: 9.0.0-unstable-2025-01-09 ->
+ 9.2.1-unstable-2025-12-23 pkgs/libtsm: 4.0.2-unstable-2023-12-24 ->
+ 4.3.0-unstable-2025-12-23 nixos/kmscon: use agetty, now inherits agetty
+ configuration
+
+---
+ nixos/modules/services/ttys/getty.nix  | 10 ++++
+ nixos/modules/services/ttys/kmscon.nix | 77 +++++++++++++++++---------
+ pkgs/by-name/km/kmscon/package.nix     | 25 ++++++---
+ pkgs/by-name/km/kmscon/sandbox.patch   | 15 +++--
+ pkgs/by-name/li/libtsm/package.nix     | 23 ++++----
+ 5 files changed, 96 insertions(+), 54 deletions(-)
+
+diff --git a/nixos/modules/services/ttys/getty.nix b/nixos/modules/services/ttys/getty.nix
+index 6c9932b15887f..68e093580a031 100644
+--- a/nixos/modules/services/ttys/getty.nix
++++ b/nixos/modules/services/ttys/getty.nix
+@@ -125,6 +125,16 @@ in
+         '';
+       };
+ 
++      kmscon = mkOption {
++        type = types.str;
++        default = gettyCmd "--noclear - -- $$TERM";
++        readOnly = true;
++        visible = false;
++        description = ''
++          This is a pass-through value for kmscon. You are to leave this option alone.
++        '';
++      };
++
+     };
+ 
+   };
+diff --git a/nixos/modules/services/ttys/kmscon.nix b/nixos/modules/services/ttys/kmscon.nix
+index 70d3e15e6e363..24b2e5825e515 100644
+--- a/nixos/modules/services/ttys/kmscon.nix
++++ b/nixos/modules/services/ttys/kmscon.nix
+@@ -16,8 +16,7 @@ let
+     ;
+ 
+   cfg = config.services.kmscon;
+-
+-  autologinArg = lib.optionalString (cfg.autologinUser != null) "-f ${cfg.autologinUser}";
++  gettyCmd = config.services.getty.kmscon;
+ 
+   configDir = pkgs.writeTextFile {
+     name = "kmscon-config";
+@@ -29,16 +28,15 @@ in
+   options = {
+     services.kmscon = {
+       enable = mkEnableOption ''
+-        kmscon as the virtual console instead of gettys.
+-        kmscon is a kms/dri-based userspace virtual terminal implementation.
+-        It supports a richer feature set than the standard linux console VT,
+-        including full unicode support, and when the video card supports drm
+-        should be much faster
++        Use kmscon instead of autovt.
++
++        Kmscon is a simple terminal emulator based on linux kernel mode setting (KMS).
++        It is an attempt to replace the in-kernel VT implementation with a userspace console.
+       '';
+ 
+       package = mkPackageOption pkgs "kmscon" { };
+ 
+-      hwRender = mkEnableOption "3D hardware acceleration to render the console";
++      hwRender = mkEnableOption "Enable hardware acceleration + DRM backend";
+ 
+       fonts = mkOption {
+         description = "Fonts used by kmscon, in order of priority.";
+@@ -63,7 +61,7 @@ in
+           nullOr (nonEmptyListOf fontType);
+       };
+ 
+-      useXkbConfig = mkEnableOption "" // {
++      useXkbConfig = mkEnableOption "Use XKB" // {
+         description = "Whether to configure keymap from xserver keyboard settings.";
+       };
+ 
+@@ -80,35 +78,60 @@ in
+         default = "";
+         example = "--term xterm-256color";
+       };
+-
+-      autologinUser = mkOption {
+-        type = types.nullOr types.str;
+-        default = null;
+-        description = ''
+-          Username of the account that will be automatically logged in at the console.
+-          If unspecified, a login prompt is shown as usual.
+-        '';
+-      };
+     };
+   };
+ 
+   config = mkIf cfg.enable {
+-    systemd.packages = [ cfg.package ];
++    meta.maintainers = with lib.maintainers; [ hustlerone ];
++    systemd.packages = [
++      cfg.package
++    ];
+ 
+     systemd.services."kmsconvt@" = {
++      description = "KMS System Console on %I";
++      documentation = [ "man:kmscon(1)" ];
++
++      before = [
++        "getty.target"
++      ];
++
+       after = [
+-        "systemd-logind.service"
+-        "systemd-vconsole-setup.service"
++        "systemd-user-sessions.service"
++        "plymouth-quit-wait.service"
++        "rc-local.service"
++      ];
++
++      conflicts = [
++        "getty@%i.service"
++      ];
++
++      onFailure = [
++        "getty@%i.service"
+       ];
+-      requires = [ "systemd-logind.service" ];
+ 
+-      serviceConfig.ExecStart = [
+-        ""
+-        ''
+-          ${cfg.package}/bin/kmscon "--vt=%I" ${cfg.extraOptions} --seats=seat0 --no-switchvt --configdir ${configDir} --login -- ${pkgs.shadow}/bin/login -p ${autologinArg}
+-        ''
++      wantedBy = [
++        "getty.target"
+       ];
+ 
++      unitConfig = {
++        IgnoreOnIsolate = "yes";
++        ConditionPathExists = "/dev/tty0";
++      };
++
++      serviceConfig = {
++        ExecStart = ''${pkgs.kmscon}/bin/kmscon --vt=%I --seats=seat0 --no-switchvt ${
++          lib.optionalString (!cfg.hwRender) "--no-drm"
++        } --configdir ${configDir} --login -- ${gettyCmd}'';
++
++        ## I know that usually we'd be using /bin/login directly, but this is what upstream's doing.
++
++        UtmpIdentifier = "%I";
++        TTYPath = "/dev/%I";
++        TTYReset = true;
++        TTYVHangup = true;
++        TTYVTDisallocate = true;
++      };
++
+       restartIfChanged = false;
+       aliases = [ "autovt@.service" ];
+     };
+diff --git a/pkgs/by-name/km/kmscon/package.nix b/pkgs/by-name/km/kmscon/package.nix
+index 27c9a1f17ebb4..8068617239337 100644
+--- a/pkgs/by-name/km/kmscon/package.nix
++++ b/pkgs/by-name/km/kmscon/package.nix
+@@ -2,6 +2,7 @@
+   lib,
+   stdenv,
+   fetchFromGitHub,
++  fetchpatch,
+   meson,
+   libtsm,
+   systemdLibs,
+@@ -10,7 +11,8 @@
+   libGLU,
+   libGL,
+   pango,
+-  pixman,
++  bash,
++  shadow,
+   pkg-config,
+   docbook_xsl,
+   libxslt,
+@@ -19,15 +21,15 @@
+   check,
+   buildPackages,
+ }:
+-stdenv.mkDerivation {
++stdenv.mkDerivation (finalAttrs: {
+   pname = "kmscon";
+-  version = "9.0.0-unstable-2025-01-09";
++  version = "9.2.1-unstable-2025-12-23";
+ 
+   src = fetchFromGitHub {
+-    owner = "Aetf";
++    owner = "kmscon";
+     repo = "kmscon";
+-    rev = "a81941f4464e6f9cee75bfb8a1db88c253ede33d";
+-    sha256 = "sha256-l7Prt7CsYi4VCnp9xktvqqNT+4djSdO2GvP1JdxhNSI=";
++    rev = "147e936e9411fc5960eefbd5a4f0d260a445e369";
++    hash = "sha256-EzJvknCTqImDlHvhuVMjG+Q19XcrYdART4lJsntquTo=";
+   };
+ 
+   strictDeps = true;
+@@ -43,10 +45,10 @@ stdenv.mkDerivation {
+     libtsm
+     libxkbcommon
+     pango
+-    pixman
+     systemdLibs
+     libgbm
+     check
++    bash
+   ];
+ 
+   nativeBuildInputs = [
+@@ -67,12 +69,17 @@ stdenv.mkDerivation {
+     ./sandbox.patch # Generate system units where they should be (nix store) instead of /etc/systemd/system
+   ];
+ 
++  postPatch = ''
++    substituteInPlace src/pty.c src/kmscon_conf.c docs/man/kmscon.1.xml.in \
++    --replace-fail /bin/login ${lib.getExe' shadow "login"}
++  '';
++
+   meta = {
+     description = "KMS/DRM based System Console";
+     mainProgram = "kmscon";
+     homepage = "https://www.freedesktop.org/wiki/Software/kmscon/";
+     license = lib.licenses.mit;
+-    maintainers = [ ];
++    maintainers = with lib.maintainers; [ hustlerone ];
+     platforms = lib.platforms.linux;
+   };
+-}
++})
+diff --git a/pkgs/by-name/km/kmscon/sandbox.patch b/pkgs/by-name/km/kmscon/sandbox.patch
+index e70d0da80a198..f5af87224debe 100644
+--- a/pkgs/by-name/km/kmscon/sandbox.patch
++++ b/pkgs/by-name/km/kmscon/sandbox.patch
+@@ -1,25 +1,24 @@
+-From d51e35a7ab936983b2a544992adae66093c6028f Mon Sep 17 00:00:00 2001
+-From: hustlerone <nine-ball@tutanota.com>
+-Date: Thu, 20 Feb 2025 11:05:56 +0100
+-Subject: [PATCH] Patch for nixpkgs
++From e1b7e6f0b45e39e5f90b18b3aebd4ef178939ff5 Mon Sep 17 00:00:00 2001
++From: N/A <N/A>
++Date: Mon, 20 Oct 2025 12:18:17 +0200
++Subject: [PATCH] cmon bruh
+ 
+ ---
+  meson.build | 2 +-
+  1 file changed, 1 insertion(+), 1 deletion(-)
+ 
+ diff --git a/meson.build b/meson.build
+-index 964b44b..4415084 100644
++index 63f4944..d830ae7 100644
+ --- a/meson.build
+ +++ b/meson.build
+ @@ -39,7 +39,7 @@ mandir = get_option('mandir')
+  moduledir = get_option('libdir') / meson.project_name()
+  
+  systemd_deps = dependency('systemd', required: false)
+--systemdsystemunitdir = systemd_deps.get_variable('systemdsystemunitdir', default_value: get_option('libdir') / 'systemd/system')
++-systemdsystemunitdir = systemd_deps.get_variable('systemdsystemunitdir', default_value: 'lib/systemd/system')
+ +systemdsystemunitdir = get_option('libdir') / 'systemd'
+  
+  #
+  # Required dependencies
+ -- 
+-2.47.2
+-
++2.51.0
+diff --git a/pkgs/by-name/li/libtsm/package.nix b/pkgs/by-name/li/libtsm/package.nix
+index 9e7877e18f151..59955f3aed8be 100644
+--- a/pkgs/by-name/li/libtsm/package.nix
++++ b/pkgs/by-name/li/libtsm/package.nix
+@@ -4,24 +4,27 @@
+   fetchFromGitHub,
+   libxkbcommon,
+   pkg-config,
+-  cmake,
++  meson,
++  ninja,
++  check,
+ }:
+-
+-stdenv.mkDerivation {
++stdenv.mkDerivation (finalAttrs: {
+   pname = "libtsm";
+-  version = "4.0.2-unstable-2023-12-24";
++  version = "4.3.0-unstable-2025-12-23";
+ 
+   src = fetchFromGitHub {
+-    owner = "Aetf";
++    owner = "kmscon";
+     repo = "libtsm";
+-    rev = "69922bde02c7af83b4d48a414cc6036af7388626";
+-    sha256 = "sha256-Rug3OWSbbiIivItULPNNptClIZ/PrXdQeUypAAxrUY8=";
++    rev = "10a34a5b7b5fe2d7c1398134400812d69d9c2432";
++    hash = "sha256-PcY10Zh6NelZtwBhzRdvVq9sW7LdWsfP0Ta8OW4Wls8=";
+   };
+ 
+   buildInputs = [ libxkbcommon ];
+ 
+   nativeBuildInputs = [
+-    cmake
++    meson
++    ninja
++    check
+     pkg-config
+   ];
+ 
+@@ -29,7 +32,7 @@ stdenv.mkDerivation {
+     description = "Terminal-emulator State Machine";
+     homepage = "https://www.freedesktop.org/wiki/Software/kmscon/libtsm/";
+     license = lib.licenses.mit;
+-    maintainers = [ ];
++    maintainers = with lib.maintainers; [ hustlerone ];
+     platforms = lib.platforms.linux;
+   };
+-}
++})

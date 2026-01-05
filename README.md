@@ -27,6 +27,13 @@ The easiest way to get started is to initialise from a template as such:
 nix flake init -t github:hustlerone/snork#quick-start
 ```
 
+However, it's incredibly barebones and is not representative of what this framework offers.
+
+Here's a template that's closer to the real world:
+```sh
+nix flake init -t github:hustlerone/snork#real-world-example
+```
+
 All templates are inside the `templates` folder in the tree.
 
 ## Usage of the framework
