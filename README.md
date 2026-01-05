@@ -88,12 +88,53 @@ As of now, these are the parameters used by the framework:
 - `modulesFolder`
 - `patchesFolder`
 - `specialArgs`
+- `profilesFolder`
+- `profileDefinitions`
+
+### `modulesFolder`
 
 If you want modules shared across all systems in your config, you might want them inside a folder specified by `modulesFolder`. They will all be automatically imported.
 
-If you want to patch nixpkgs (i.e: you want to test a PR and merge it into your config), place your git patch file(s) inside a folder specified by `patchesFolder`. All patches inside will be applied.
+### `patchesFolder`
+
+If you want to patch nixpkgs (i.e: you want to test a PR and merge it into your config), place your git patch file(s) inside a folder specified by `patchesFolder`. All patches inside will be applied. **Currently, because of a limitation with flakes, the patches will be done assuming we're using an x86_64 system. If your platform differs, its functionality is not guaranteed.**
+
+### `specialArgs`
 
 If you want to add specialArgs for all systems (i.e: you want your flake input(s) be accessible from a module), then specify them so in `specialArgs`. They will be accessible as a module input.
+
+### `profileDefinitions`
+
+If you want separate modules per profiles (let's say you want a set of modules to be for servers only and the other set for laptops only), you shall put each profile in a subfolder of where  `profilesFolder` is specified, like so:
+
+```
+├── flake.nix
+├── flake.lock
+└── profiles
+    ├── profile2
+    │   └── [...]
+    ├── profile2
+    │   └── [...]
+    ├── profile2
+    │   └── [...]
+  [...]
+    │
+    │
+    └── lastProfile
+        └── [...]
+
+# There can be as many subfolders per profile as you'd like. 
+# It'll search the entire subdirectory for .nix files.
+```
+
+To apply a profile to a system, you're going to fill out profileDefinitions as an attribute set of an attribute list, whose key is the system and the value is the set of profiles to be imported by the system, like so:
+```
+{
+	exampleConfiguration1 = [ "profile1" "profile2" ... "lastProfile"];
+	...
+	finalExample = [ "profile1" "profile4" ... "lastProfile"];
+}
+```
 
 # Something's missing? This framework sucks?
 Don't hesitate to open an issue or a PR.
