@@ -111,11 +111,11 @@ If you want separate modules per profiles (let's say you want a set of modules t
 ├── flake.nix
 ├── flake.lock
 └── profiles
-    ├── profile2
+    ├── profile1
     │   └── [...]
     ├── profile2
     │   └── [...]
-    ├── profile2
+    ├── profile3
     │   └── [...]
   [...]
     │
@@ -130,9 +130,11 @@ If you want separate modules per profiles (let's say you want a set of modules t
 To apply a profile to a system, you're going to fill out profileDefinitions as an attribute set of an attribute list, whose key is the system and the value is the set of profiles to be imported by the system, like so:
 ```
 {
-	exampleConfiguration1 = [ "profile1" "profile2" ... "lastProfile"];
+    exampleConfiguration1 = [ "profile1" "profile2" ];
+    exampleConfiguration2 = [ "profile3" "profile1" ];
+    exampleConfiguration3 = [ "lastProfile" ];
 	...
-	finalExample = [ "profile1" "profile4" ... "lastProfile"];
+	finalExample = [ "profile1" "profile2" ... "lastProfile"];
 }
 ```
 
