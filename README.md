@@ -3,6 +3,21 @@ A NixOS configuration framework to ease maintainability of your flakes.
 
 It strives to be the simplest and most generic solution to the problems some of us face when making a multi-system NixOS flake configuration.
 
+## Getting Started
+The easiest way to get started is to initialise from a template as such:
+```sh
+nix flake init -t github:hustlerone/snork#quick-start
+```
+
+However, it's incredibly barebones and is not representative of what this framework offers.
+
+Here's a template that's closer to the real world:
+```sh
+nix flake init -t github:hustlerone/snork#real-world-example
+```
+
+All templates are inside the `templates` folder in the tree.
+
 ## Yet another framework? Why?
 I tried to use other people's frameworks before writing my config from scratch. However, they were never good enough. Either they barely achieved anything or they got in your way and left you banging your head against the wall.
 
@@ -20,21 +35,6 @@ In terms of features, it:
 - Allows you to import all modules contained within a folder with no additional setup
 
 It also tries to get out of your way as much as possible.
-
-## Getting Started
-The easiest way to get started is to initialise from a template as such:
-```sh
-nix flake init -t github:hustlerone/snork#quick-start
-```
-
-However, it's incredibly barebones and is not representative of what this framework offers.
-
-Here's a template that's closer to the real world:
-```sh
-nix flake init -t github:hustlerone/snork#real-world-example
-```
-
-All templates are inside the `templates` folder in the tree.
 
 ## Usage of the framework
 
