@@ -29,6 +29,7 @@
           specialArgs ? null,
           profilesFolder ? null,
           profileDefinitions ? { },
+          extraModules ? [ ],
         }:
         let
           inherit (nixpkgs) lib;
@@ -60,9 +61,13 @@
           || (builtins.pathExists profilesFolder && (allLists profileDefinitions))
         ) "Attribute `profileDefinitions` is not an attribute set of attribute list.";
 
+        assert lib.assertMsg (builtins.isList extraModules)
+          "Attribute `extraModules` is not an attribute list.";
+
         import ./lib/generateSystems.nix nixpkgs specialArgs systemsFolder modulesFolder patchesFolder
           profilesFolder
-          profileDefinitions;
+          profileDefinitions
+          extraModules;
 
       templates = {
         quick-start = {

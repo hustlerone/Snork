@@ -1,4 +1,4 @@
-nixpkgs: specialArgs: systemsFolder: modulesFolder: patchesFolder: profilesFolder: profileDefinitions:
+nixpkgs: specialArgs: systemsFolder: modulesFolder: patchesFolder: profilesFolder: profileDefinitions: extraModules:
 let
   inherit (nixpkgs) lib;
   recursivelyImport = import ./recursivelyImport.nix { inherit lib; };
@@ -53,6 +53,7 @@ in
           networking.hostName = lib.mkDefault (builtins.toString Folder);
         }
       ]
+      ++ (if builtins.isList extraModules then extraModules else [ ])
       ++ (recursivelyImport (
         (if (builtins.pathExists modulesFolder) then [ modulesFolder ] else [ ])
         ++ (
